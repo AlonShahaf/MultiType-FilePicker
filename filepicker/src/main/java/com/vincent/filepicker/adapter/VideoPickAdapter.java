@@ -5,8 +5,10 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.support.v4.content.FileProvider;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -17,6 +19,7 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.RequestOptions;
 import com.vincent.filepicker.R;
 import com.vincent.filepicker.ToastUtil;
 import com.vincent.filepicker.Util;
@@ -30,6 +33,7 @@ import java.util.Date;
 import java.util.Locale;
 
 import static android.os.Environment.DIRECTORY_DCIM;
+import static com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions.withCrossFade;
 import static com.vincent.filepicker.Constant.REQUEST_CODE_TAKE_VIDEO;
 
 /**
@@ -89,7 +93,11 @@ public class VideoPickAdapter extends BaseAdapter<VideoFile, VideoPickAdapter.Vi
 
                     intent.putExtra(MediaStore.EXTRA_OUTPUT, uri);
                     intent.putExtra(MediaStore.EXTRA_VIDEO_QUALITY, 1);
-                    ((Activity) mContext).startActivityForResult(intent, REQUEST_CODE_TAKE_VIDEO);
+                    if (Util.detectIntent(mContext, intent)) {
+                        ((Activity) mContext).startActivityForResult(intent, REQUEST_CODE_TAKE_VIDEO);
+                    } else {
+                        ToastUtil.getInstance(mContext).showToast(mContext.getString(R.string.vw_no_video_app));
+                    }
                 }
             });
         } else {
@@ -105,10 +113,12 @@ public class VideoPickAdapter extends BaseAdapter<VideoFile, VideoPickAdapter.Vi
                 file = mList.get(position);
             }
 
+            RequestOptions options = new RequestOptions();
             Glide.with(mContext)
                     .load(file.getPath())
-                    .centerCrop()
-                    .crossFade()
+                    .apply(options.centerCrop())
+                    .transition(withCrossFade())
+//                    .transition(new DrawableTransitionOptions().crossFade(500))
                     .into(holder.mIvThumbnail);
 
             if (file.isSelected()) {
@@ -149,13 +159,20 @@ public class VideoPickAdapter extends BaseAdapter<VideoFile, VideoPickAdapter.Vi
             holder.itemView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    Uri uri = Uri.parse("file://" + file.getPath());
                     Intent intent = new Intent(Intent.ACTION_VIEW);
+                    Uri uri;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        File f = new File(file.getPath());
+                        uri = FileProvider.getUriForFile(mContext, mContext.getApplicationContext().getPackageName() + ".provider", f);
+                    }else{
+                        uri = Uri.parse("file://" + file.getPath());
+                    }
                     intent.setDataAndType(uri, "video/mp4");
                     if (Util.detectIntent(mContext, intent)) {
                         mContext.startActivity(intent);
                     } else {
-                        ToastUtil.getInstance(mContext).showToast("No Application exists for camera!");
+                        ToastUtil.getInstance(mContext).showToast(mContext.getString(R.string.vw_no_video_play_app));
                     }
                 }
             });
@@ -188,8 +205,11 @@ public class VideoPickAdapter extends BaseAdapter<VideoFile, VideoPickAdapter.Vi
         }
     }
 
-    private boolean isUpToMax() {
+    public boolean isUpToMax() {
         return mCurrentNumber >= mMaxNumber;
     }
 
+    public void setCurrentNumber(int number) {
+        mCurrentNumber = number;
+    }
 }
